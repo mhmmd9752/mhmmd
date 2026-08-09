@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <clipPath id="round">
+      <rect x="0" y="0" width="200" height="200" rx="42"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="200" height="200" fill="#1C1610"/>
+    <!-- نگاره‌ی ستاره‌ی هشت‌پر، کم‌رنگ در پس‌زمینه -->
+    <g stroke="#E8A93A" stroke-opacity="0.35" stroke-width="1.6" fill="none">
+      <rect x="46" y="46" width="108" height="108"/>
+      <rect x="46" y="46" width="108" height="108" transform="rotate(45 100 100)"/>
+    </g>
+    <!-- سه حلقه‌ی ماکرو -->
+    <g transform="rotate(-90 100 100)" fill="none" stroke-linecap="round">
+      <circle cx="100" cy="100" r="72" stroke="#3A2E22" stroke-width="14"/>
+      <circle cx="100" cy="100" r="72" stroke="#C1443B" stroke-width="14"
+        stroke-dasharray="452.4" stroke-dashoffset="120"/>
+      <circle cx="100" cy="100" r="54" stroke="#3A2E22" stroke-width="14"/>
+      <circle cx="100" cy="100" r="54" stroke="#E8A93A" stroke-width="14"
+        stroke-dasharray="339.3" stroke-dashoffset="70"/>
+      <circle cx="100" cy="100" r="36" stroke="#3A2E22" stroke-width="14"/>
+      <circle cx="100" cy="100" r="36" stroke="#8FA05E" stroke-width="14"
+        stroke-dasharray="226.2" stroke-dashoffset="150"/>
+    </g>
+  </g>
+</svg>
