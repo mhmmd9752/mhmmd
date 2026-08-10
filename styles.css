@@ -1,0 +1,165 @@
+  :root {
+    --ink: #241A10;
+    --ink-2: #7A6A52;
+    --ink-3: #A79878;
+    --ink-label: #4A3B2A;
+    --ink-label2: #6B5D48;
+    --border-dash: #C9BBA0;
+    --card-bg: rgba(255,255,255,0.55);
+    --card-bg-soft: rgba(255,255,255,0.45);
+    --card-bg-strong: rgba(255,255,255,0.78);
+    --card-border: rgba(255,255,255,0.7);
+    --input-bg: rgba(0,0,0,0.05);
+    --input-bg-strong: rgba(0,0,0,0.1);
+    --modal-bg: #FBF6EC;
+    --track: #E3D9C7;
+    --bg-solid: #F6F0E4;
+    --bg-g1: rgba(232,169,58,0.30);
+    --bg-g2: rgba(193,68,59,0.20);
+    --bg-g3: rgba(143,160,94,0.24);
+    --bg-g4: rgba(232,169,58,0.16);
+  }
+  [data-theme="dark"] {
+    --ink: #F3E9D8;
+    --ink-2: #C9BBA4;
+    --ink-3: #8A7B64;
+    --ink-label: #E4D6BE;
+    --ink-label2: #D2C3A8;
+    --border-dash: #5f5340;
+    --card-bg: rgba(45,36,26,0.62);
+    --card-bg-soft: rgba(45,36,26,0.5);
+    --card-bg-strong: rgba(30,24,17,0.85);
+    --card-border: rgba(255,255,255,0.08);
+    --input-bg: rgba(0,0,0,0.25);
+    --input-bg-strong: rgba(0,0,0,0.35);
+    --modal-bg: #1F1811;
+    --track: #3A2E22;
+    --bg-solid: #17120D;
+    --bg-g1: rgba(232,169,58,0.20);
+    --bg-g2: rgba(193,68,59,0.16);
+    --bg-g3: rgba(143,160,94,0.16);
+    --bg-g4: rgba(232,169,58,0.1);
+  }
+  [data-theme="ocean"] {
+    --ink: #12232B;
+    --ink-2: #4E7280;
+    --ink-3: #93B0BA;
+    --ink-label: #24414D;
+    --ink-label2: #3A5B67;
+    --border-dash: #A9C6CE;
+    --card-bg: rgba(255,255,255,0.55);
+    --card-bg-soft: rgba(255,255,255,0.45);
+    --card-bg-strong: rgba(255,255,255,0.78);
+    --card-border: rgba(255,255,255,0.7);
+    --input-bg: rgba(0,0,0,0.05);
+    --input-bg-strong: rgba(0,0,0,0.1);
+    --modal-bg: #F0F7F8;
+    --track: #D4E6E9;
+    --bg-solid: #EAF4F5;
+    --bg-g1: rgba(45,156,178,0.28);
+    --bg-g2: rgba(58,110,165,0.20);
+    --bg-g3: rgba(94,178,142,0.22);
+    --bg-g4: rgba(45,156,178,0.14);
+  }
+  body {
+    font-family: 'Vazirmatn', sans-serif;
+    background-color: var(--bg-solid);
+    background-image:
+      radial-gradient(circle at 12% 18%, var(--bg-g1), transparent 42%),
+      radial-gradient(circle at 88% 12%, var(--bg-g2), transparent 40%),
+      radial-gradient(circle at 80% 85%, var(--bg-g3), transparent 45%),
+      radial-gradient(circle at 10% 90%, var(--bg-g4), transparent 40%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    transition: background-color .4s ease;
+  }
+  .font-mono { font-family: 'IBM Plex Mono', monospace; direction: ltr; unicode-bidi: plaintext; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .backdrop-blur-xl { -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes tabFade { from { opacity: 0; transform: translateY(6px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .tab-content { animation: tabFade .28s cubic-bezier(.16,1,.3,1); }
+  @keyframes sheetIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  .sheet-in { animation: sheetIn .22s cubic-bezier(.16,1,.3,1); }
+  @keyframes modalUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+  .modal-sheet { animation: modalUp .32s cubic-bezier(.16,1,.3,1); }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+  .pop-in { animation: popIn .35s cubic-bezier(.34,1.56,.64,1); }
+  * { -webkit-tap-highlight-color: transparent; }
+  button { transition: transform .15s cubic-bezier(.34,1.56,.64,1); }
+  button:active { filter: brightness(0.94); }
+  @keyframes floatBlob1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(18px,-24px) scale(1.08); } }
+  @keyframes floatBlob2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-22px,20px) scale(1.06); } }
+  @keyframes floatBlob3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(14px,16px) scale(1.05); } }
+  .blob { position: fixed; border-radius: 9999px; filter: blur(50px); pointer-events: none; z-index: 0; }
+  input[type=range] { -webkit-appearance: none; height: 4px; border-radius: 4px; background: var(--track); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #E8A93A; cursor: pointer; box-shadow: 0 0 0 4px rgba(232,169,58,0.15); }
+  input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: #E8A93A; cursor: pointer; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background:var(--track); border-radius:4px; }
+
+  /* ------------------------------------------------------------- */
+  /*  عمق و بافت بصری — سایه‌های لایه‌ای، دانه‌ی ظریف، درخشش لبه‌ها     */
+  /* ------------------------------------------------------------- */
+  html { scroll-behavior: smooth; }
+  body {
+    position: relative;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  }
+
+  /* کارت‌های شیشه‌ای: سایه‌ی نرم لایه‌ای برای عمق واقعی به‌جای تخت‌بودن */
+  .bg-\[var\(--card-bg\)\],
+  .bg-\[var\(--card-bg-soft\)\],
+  .bg-\[var\(--card-bg-strong\)\] {
+    box-shadow:
+      0 1px 2px rgba(30, 20, 10, 0.04),
+      0 8px 24px -8px rgba(30, 20, 10, 0.12),
+      inset 0 1px 0 rgba(255,255,255,0.4);
+  }
+  [data-theme="dark"] .bg-\[var\(--card-bg\)\],
+  [data-theme="dark"] .bg-\[var\(--card-bg-soft\)\],
+  [data-theme="dark"] .bg-\[var\(--card-bg-strong\)\] {
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.2),
+      0 10px 28px -10px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  /* دکمه‌های اصلی رنگی: درخشش لبه هنگام فشردن + انتقال نرم‌تر */
+  button {
+    transition: transform .15s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease, filter .15s ease;
+  }
+  button:active {
+    filter: brightness(0.93);
+  }
+
+  /* حلقه‌ی تمرکز برای دسترسی‌پذیری بهتر، هماهنگ با پالت */
+  button:focus-visible, input:focus-visible {
+    outline: 2px solid #E8A93A;
+    outline-offset: 2px;
+  }
+
+  /* درخشش ظریف روی بشقاب ماکرو */
+  @keyframes gentleGlow { 0%,100% { filter: drop-shadow(0 0 0 rgba(232,169,58,0)); } 50% { filter: drop-shadow(0 0 18px rgba(232,169,58,0.25)); } }
+  .plate-glow { animation: gentleGlow 4s ease-in-out infinite; }
+
+  /* اسکلت بارگذاری برای حالت‌های در حال انتظار */
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  .skeleton {
+    background: linear-gradient(90deg, var(--card-bg-soft) 25%, var(--card-bg-strong) 50%, var(--card-bg-soft) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* لرزش کوتاه برای خطاها */
+  @keyframes shakeX { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+  .shake { animation: shakeX .4s ease; }

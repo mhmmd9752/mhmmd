@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>سفره‌ی من — ردیاب ماکرو ایرانی</title>
+
+<!-- PWA: نصب روی صفحه‌ی اصلی مثل یک اپ واقعی -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#E8A93A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="سفره‌ی من">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- پیش‌نمایش زیبا هنگام اشتراک‌گذاری لینک -->
+<meta property="og:title" content="سفره‌ی من — ردیاب ماکرو ایرانی">
+<meta property="og:description" content="ردیابی کالری و درشت‌مغذی‌ها بر اساس تنوع غذاهای ایرانی، با اسکن بارکد و عکس.">
+<meta property="og:type" content="website">
+<meta name="description" content="ردیابی کالری و درشت‌مغذی‌ها بر اساس تنوع غذاهای ایرانی، با اسکن بارکد و عکس.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root">
+  <div id="boot-fallback" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#7A6A52;font-size:13px;text-align:center;padding:24px;">
+    <span>در حال بارگذاری «سفره‌ی من»...</span>
+  </div>
+</div>
+
+<script>
+  // نمایش پیام روشن اگر بارگذاری خیلی طول بکشد
+  window.setTimeout(function () {
+    var fb = document.getElementById("boot-fallback");
+    if (fb && !window.__APP_MOUNTED__) {
+      fb.innerHTML =
+        '<div style="max-width:340px;line-height:1.9">' +
+        '<div style="color:#C43B30;margin-bottom:8px;font-size:14px;">بارگذاری اپ با مشکل مواجه شد</div>' +
+        '<div>همه‌ی سرورهای پشتیبان هم برای بارگذاری کتابخانه‌های موردنیاز (React/Babel/Tailwind) شکست خوردند. یا اینترنت وصل نیست، یا فیلترینگ شبکه‌ی فعلی خیلی سخت‌گیرانه است. اتصال به فیلترشکن را امتحان کن و صفحه را رفرش کن.</div>' +
+        '</div>';
+    }
+  }, 15000);
+
+  // بارگذاری کتابخانه‌ها از چند CDN مختلف با اولویت jsDelivr (معمولاً در ایران در دسترس‌تر است)
+  function loadScript(url) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = url;
+      s.crossOrigin = "anonymous";
+      s.onload = function () { resolve(url); };
+      s.onerror = function () { reject(new Error("failed: " + url)); };
+      document.head.appendChild(s);
+    });
+  }
+  function loadFirstWorking(urls) {
+    var i = 0;
+    function attempt() {
+      if (i >= urls.length) return Promise.reject(new Error("all sources failed: " + urls.join(", ")));
+      var url = urls[i++];
+      return loadScript(url).catch(attempt);
+    }
+    return attempt();
+  }
+
+  var SOURCES = {
+    react: [
+      "https://cdn.staticfile.org/react/18.3.1/umd/react.production.min.js",
+      "https://cdn.bootcdn.net/ajax/libs/react/18.3.1/umd/react.production.min.js",
+      "https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js",
+      "https://unpkg.com/react@18/umd/react.production.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js",
+    ],
+    reactDom: [
+      "https://cdn.staticfile.org/react-dom/18.3.1/umd/react-dom.production.min.js",
+      "https://cdn.bootcdn.net/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js",
+      "https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js",
+      "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js",
+    ],
+    babel: [
+      "https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.24.7/babel.min.js",
+      "https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js",
+      "https://unpkg.com/@babel/standalone/babel.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js",
+    ],
+    tailwind: [
+      "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4",
+      "https://cdn.tailwindcss.com",
+    ],
+  };
+
+  (async function boot() {
+    var fb = document.getElementById("boot-fallback");
+    try {
+      await loadFirstWorking(SOURCES.react);
+      await loadFirstWorking(SOURCES.reactDom);
+      // تیلویند فقط برای ظاهر است؛ اگر شکست خورد، اپ باز هم باید بالا بیاید
+      loadFirstWorking(SOURCES.tailwind).catch(function () { console.warn("tailwind failed to load from all sources"); });
+      await loadFirstWorking(SOURCES.babel);
+
+      var code = await (await fetch("app.jsx")).text();
+      var compiled = Babel.transform(code, { presets: ["react"] }).code;
+      (0, eval)(compiled);
+    } catch (err) {
+      console.error(err);
+      if (fb) {
+        fb.innerHTML =
+          '<div style="max-width:340px;line-height:1.9">' +
+          '<div style="color:#C43B30;margin-bottom:8px;font-size:14px;">بارگذاری اپ با مشکل مواجه شد</div>' +
+          '<div>نتوانستیم React/Babel را از هیچ‌کدام از منابع بارگذاری کنیم. اتصال اینترنت یا فیلترشکن را بررسی کن و صفحه را رفرش کن.</div>' +
+          '</div>';
+      }
+    }
+  })();
+</script>
+
+
+</body>
+</html>
