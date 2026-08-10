@@ -38,6 +38,23 @@ const IDownload = (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a
 const IUpload = (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></>} />;
 const IScale = (p) => <Icon {...p} path={<><path d="M12 3v18"/><path d="M5 7h14"/><path d="M3 7l2.5 6a2.5 2.5 0 0 0 5 0L13 7"/><path d="M11 7l2.5 6a2.5 2.5 0 0 0 5 0L21 7"/></>} />;
 const IBookmark = (p) => <Icon {...p} path={<path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/>} />;
+const IMessage = (p) => <Icon {...p} path={<><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.2-.6L4 20l1.6-3.7A7.3 7.3 0 0 1 4.5 12 7.5 7.5 0 0 1 12 4.5h.5A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></>} />;
+
+const AI_API_URL = window.AI_API_URL || "https://YOUR-WORKER.workers.dev";
+
+async function callAI(payload) {
+  if (!AI_API_URL || AI_API_URL.includes("YOUR-WORKER")) {
+    throw new Error("AI_API_URL is not configured");
+  }
+  const response = await fetch(AI_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || ("network " + response.status));
+  return data;
+}
 
 /* ------------------------------------------------------------------ */
 /*  بانک غذای ایرانی — مقادیر به‌ازای هر ۱۰۰ گرم                        */
@@ -1081,11 +1098,12 @@ function AddFoodTab({ onAdd, frequent, savedMeals, onAddSavedMeal, onDeleteSaved
 /*  تب اسکن عکس غذا با هوش مصنوعی (نیازمند کلید API آنتروپیک)           */
 /* ------------------------------------------------------------------ */
 
-function PhotoScanTab({ onAdd, apiKey, apiProvider, onNeedKey }) {
+function PhotoScanTab({ onAdd }) {
   const [image, setImage] = useState(null);
   const [status, setStatus] = useState("idle");
   const [result, setResult] = useState(null);
   const [grams, setGrams] = useState(250);
+  const [error, setError] = useState("");
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
 
@@ -1096,99 +1114,26 @@ function PhotoScanTab({ onAdd, apiKey, apiProvider, onNeedKey }) {
       const base64 = reader.result.split(",")[1];
       setImage({ base64, mime: file.type, preview: reader.result });
       setResult(null);
+      setError("");
       setStatus("idle");
     };
     reader.readAsDataURL(file);
   };
 
-  const PROMPT = "این تصویر یک غذا را نشان می‌دهد که احتمالاً غذای ایرانی است. نام غذا را به فارسی تشخیص بده و مقادیر تخمینی درشت‌مغذی‌ها را به‌ازای هر ۱۰۰ گرم برآورد کن. فقط یک JSON خام (بدون توضیح، بدون بک‌تیک) با این ساختار برگردان: {\"name\": \"نام فارسی\", \"kcal\": عدد, \"protein\": عدد, \"carb\": عدد, \"fat\": عدد, \"confidence\": \"low|medium|high\", \"note\": \"یک جمله کوتاه فارسی\"}";
-
-  const analyzeWithClaude = async () => {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: image.mime || "image/jpeg", data: image.base64 } },
-            { type: "text", text: PROMPT },
-          ],
-        }],
-      }),
-    });
-    if (!response.ok) throw new Error("network " + response.status);
-    const data = await response.json();
-    const text = (data.content || []).map((b) => b.text || "").join("").trim();
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
-  };
-
-  const analyzeWithGemini = async () => {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey),
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: image.mime || "image/jpeg", data: image.base64 } },
-              { text: PROMPT },
-            ],
-          }],
-        }),
-      }
-    );
-    if (!response.ok) throw new Error("network " + response.status);
-    const data = await response.json();
-    const text = ((data.candidates || [])[0]?.content?.parts || []).map((p) => p.text || "").join("").trim();
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
-  };
-
-  const analyzeWithOpenAI = async () => {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + apiKey,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: PROMPT },
-            { type: "image_url", image_url: { url: "data:" + (image.mime || "image/jpeg") + ";base64," + image.base64 } },
-          ],
-        }],
-      }),
-    });
-    if (!response.ok) throw new Error("network " + response.status);
-    const data = await response.json();
-    const text = (data.choices?.[0]?.message?.content || "").trim();
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
-  };
-
   const analyze = async () => {
     if (!image) return;
-    if (!apiKey) { onNeedKey(); return; }
     setStatus("loading");
+    setError("");
     try {
-      const parsed = apiProvider === "gemini" ? await analyzeWithGemini()
-        : apiProvider === "openai" ? await analyzeWithOpenAI()
-        : await analyzeWithClaude();
-      setResult(parsed);
+      const data = await callAI({
+        action: "analyze-food",
+        image: { data: image.base64, mime: image.mime || "image/jpeg" },
+      });
+      setResult(data.result);
       setStatus("done");
     } catch (e) {
       console.error(e);
+      setError(e.message || "خطا در ارتباط با هوش مصنوعی");
       setStatus("error");
     }
   };
@@ -1197,12 +1142,11 @@ function PhotoScanTab({ onAdd, apiKey, apiProvider, onNeedKey }) {
 
   return (
     <div>
-      {!apiKey && (
-        <div className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-3 mb-4 flex items-start gap-2">
-          <IAlert size={15} className="text-[#E8A93A] shrink-0 mt-0.5" />
-          <p className="text-[13px] text-[var(--ink-2)]">برای تشخیص هوشمند عکس، یک کلید API رایگان از Google Gemini (یا Anthropic) در تنظیمات وارد کن. کلید فقط در همین مرورگر ذخیره می‌شود.</p>
-        </div>
-      )}
+      <div className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-3 mb-4 flex items-start gap-2">
+        <IAlert size={15} className="text-[#E8A93A] shrink-0 mt-0.5" />
+        <p className="text-[13px] text-[var(--ink-2)]">تشخیص غذا با ChatGPT انجام می‌شود. کلید API در مرورگر ذخیره نمی‌شود و فقط سرور واسط به آن دسترسی دارد.</p>
+      </div>
+      {error && <div className="bg-red-500/10 border border-red-500/20 text-red-700 rounded-xl p-3 mb-3 text-[13px]">{error}</div>}
       <div className="border border-dashed border-[var(--border-dash)] rounded-2xl aspect-[4/3] flex flex-col items-center justify-center gap-3 mb-3 overflow-hidden bg-[var(--card-bg)] backdrop-blur-xl">
         {image ? <img src={image.preview} alt="غذای انتخاب‌شده" className="w-full h-full object-cover" /> : (
           <>
@@ -1212,411 +1156,40 @@ function PhotoScanTab({ onAdd, apiKey, apiProvider, onNeedKey }) {
         )}
       </div>
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <button onClick={() => cameraRef.current?.click()}
-          className="flex items-center justify-center gap-1.5 bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-xl py-2.5 text-[14px] text-[var(--ink)] active:scale-[0.98] transition">
-          <ICamera size={15} /> گرفتن عکس
-        </button>
-        <button onClick={() => galleryRef.current?.click()}
-          className="flex items-center justify-center gap-1.5 bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-xl py-2.5 text-[14px] text-[var(--ink)] active:scale-[0.98] transition">
-          <IImagePlus size={15} /> گالری / فایل
-        </button>
+        <button onClick={() => cameraRef.current?.click()} className="flex items-center justify-center gap-1.5 bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-xl py-2.5 text-[14px] text-[var(--ink)] active:scale-[0.98] transition"><ICamera size={15} /> گرفتن عکس</button>
+        <button onClick={() => galleryRef.current?.click()} className="flex items-center justify-center gap-1.5 bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-xl py-2.5 text-[14px] text-[var(--ink)] active:scale-[0.98] transition"><IImagePlus size={15} /> انتخاب از گالری</button>
       </div>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
       <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
-
-      {image && status !== "loading" && (
-        <button onClick={analyze} className="w-full bg-[#E8A93A] text-[#1C1610] font-medium rounded-xl py-2.5 text-[15px] mb-3 active:scale-[0.98] transition">
-          تخمین ماکروها با هوش مصنوعی
-        </button>
-      )}
-      {status === "loading" && (
-        <div className="flex items-center justify-center gap-2 text-[var(--ink-2)] text-[14px] py-4">
-          <ILoader size={16} className="animate-spin" /> در حال تحلیل تصویر...
-        </div>
-      )}
-      {status === "error" && (
-        <div className="flex items-center gap-2 text-[#C1443B] text-[14px] py-2">
-          <IAlert size={15} /> تحلیل با خطا مواجه شد. کلید API را بررسی کن یا از افزودن دستی استفاده کن.
-        </div>
-      )}
-      {status === "done" && result && (
-        <div className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[16px] text-[var(--ink)] font-medium">{result.name}</span>
-            <span className="text-[12px] text-[var(--ink-2)] font-mono">اطمینان: {({ high: "زیاد", medium: "متوسط", low: "کم" })[result.confidence] || "متوسط"}</span>
-          </div>
-          {result.note && <p className="text-[13px] text-[var(--ink-2)] mb-3">{result.note}</p>}
-          <div className="flex items-center gap-3 mb-3">
-            <input type="range" min="20" max="800" step="10" value={grams} onChange={(e) => setGrams(Number(e.target.value))} className="flex-1" />
-            <span className="font-mono text-[14px] text-[var(--ink)] w-16 text-left">{toFa(grams)} گ</span>
-          </div>
-          <div className="grid grid-cols-4 gap-2 mb-3 text-center font-mono text-[13px]">
-            <div><div className="text-[var(--ink)]">{toFa(Math.round(result.kcal * factor))}</div><div className="text-[var(--ink-3)]">کالری</div></div>
-            <div><div className="text-[#C1443B]">{toFa(round(result.protein * factor))}</div><div className="text-[var(--ink-3)]">پروتئین</div></div>
-            <div><div className="text-[#E8A93A]">{toFa(round(result.carb * factor))}</div><div className="text-[var(--ink-3)]">کربو</div></div>
-            <div><div className="text-[#8FA05E]">{toFa(round(result.fat * factor))}</div><div className="text-[var(--ink-3)]">چربی</div></div>
-          </div>
-          <button onClick={() => { onAdd({ id: "scan-" + Date.now(), name: result.name, grams, kcal: result.kcal * factor, protein: result.protein * factor, carb: result.carb * factor, fat: result.fat * factor }); setImage(null); setResult(null); setStatus("idle"); }}
-            className="w-full bg-[#C1443B] text-white rounded-xl py-2.5 text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition">
-            <ICheck size={16} /> افزودن به لیست امروز
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  تب اسکن بارکد                                                       */
-/* ------------------------------------------------------------------ */
-
-function BarcodeScanTab({ onAdd }) {
-  const [scanning, setScanning] = useState(false);
-  const [status, setStatus] = useState("idle");
-  const [product, setProduct] = useState(null);
-  const [manualCode, setManualCode] = useState("");
-  const [grams, setGrams] = useState(100);
-  const html5QrRef = useRef(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (scanning) {
-      const existing = document.getElementById("html5-qrcode-script");
-      const start = () => {
-        if (cancelled) return;
-        const qr = new window.Html5Qrcode("barcode-reader");
-        html5QrRef.current = qr;
-        qr.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } },
-          (decodedText) => handleCode(decodedText), () => {}).catch(() => setStatus("error"));
-      };
-      if (existing && window.Html5Qrcode) { start(); }
-      else {
-        const script = document.createElement("script");
-        script.id = "html5-qrcode-script";
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
-        script.onload = start;
-        document.body.appendChild(script);
-      }
-      return () => {
-        cancelled = true;
-        if (html5QrRef.current) html5QrRef.current.stop().then(() => html5QrRef.current.clear()).catch(() => {});
-      };
-    }
-  }, [scanning]);
-
-  const handleCode = async (code) => {
-    if (html5QrRef.current) html5QrRef.current.stop().then(() => html5QrRef.current.clear()).catch(() => {});
-    setScanning(false);
-    setStatus("looking");
-    try {
-      const res = await fetch("https://world.openfoodfacts.org/api/v2/product/" + code + ".json");
-      const data = await res.json();
-      if (data.status === 1 && data.product) {
-        const p = data.product;
-        const n = p.nutriments || {};
-        setProduct({ code, name: p.product_name_fa || p.product_name || "محصول ناشناس", brand: p.brands || "",
-          kcal: n["energy-kcal_100g"] ?? (n["energy_100g"] ? n["energy_100g"] / 4.184 : 0),
-          protein: n["proteins_100g"] ?? 0, carb: n["carbohydrates_100g"] ?? 0, fat: n["fat_100g"] ?? 0,
-          image: p.image_front_small_url });
-        setStatus("found");
-      } else setStatus("notfound");
-    } catch (e) { console.error(e); setStatus("error"); }
-  };
-
-  const factor = grams / 100;
-
-  return (
-    <div>
-      {!scanning && status === "idle" && (
-        <button onClick={() => setScanning(true)}
-          className="w-full border border-dashed border-[var(--border-dash)] rounded-2xl aspect-[4/3] flex flex-col items-center justify-center gap-2 mb-4 bg-[var(--card-bg)] backdrop-blur-xl">
-          <IBarcode size={30} className="text-[var(--ink-2)]" />
-          <span className="text-[14px] text-[var(--ink-2)]">لمس کن تا دوربین بارکد باز شود</span>
-        </button>
-      )}
-      {scanning && (
-        <div className="mb-4">
-          <div id="barcode-reader" className="rounded-2xl overflow-hidden bg-black" />
-          <button onClick={() => setScanning(false)} className="mt-2 text-[14px] text-[var(--ink-2)]">لغو</button>
-        </div>
-      )}
-      {status === "looking" && (
-        <div className="flex items-center justify-center gap-2 text-[var(--ink-2)] text-[14px] py-4">
-          <ILoader size={16} className="animate-spin" /> در حال جستجوی بارکد...
-        </div>
-      )}
-      {status === "notfound" && <p className="text-[14px] text-[#C1443B] mb-3">این بارکد پیدا نشد. کد را دستی وارد کن یا در تب «افزودن» ثبت کن.</p>}
-      {status === "error" && <p className="text-[14px] text-[#C1443B] mb-3">دسترسی به دوربین یا اینترنت ممکن نشد.</p>}
-      {status !== "found" && (
-        <div className="flex items-center gap-2 mt-2">
-          <input value={manualCode} onChange={(e) => setManualCode(e.target.value)} placeholder="یا کد بارکد را دستی وارد کن"
-            className="flex-1 bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-lg px-3 py-2 text-[14px] text-[var(--ink)] outline-none font-mono" />
-          <button onClick={() => manualCode && handleCode(manualCode)} className="bg-[var(--input-bg-strong)] text-[var(--ink)] rounded-lg px-3 py-2 text-[14px]">جستجو</button>
-        </div>
-      )}
-      {status === "found" && product && (
-        <div className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-4">
-          <div className="flex items-center gap-3 mb-3">
-            {product.image && <img src={product.image} alt="" className="w-12 h-12 rounded-lg object-cover" />}
-            <div>
-              <div className="text-[16px] text-[var(--ink)]">{product.name}</div>
-              {product.brand && <div className="text-[13px] text-[var(--ink-2)]">{product.brand}</div>}
-            </div>
-          </div>
-          <div className="flex items-center gap-3 mb-3">
-            <input type="range" min="10" max="500" step="10" value={grams} onChange={(e) => setGrams(Number(e.target.value))} className="flex-1" />
-            <span className="font-mono text-[14px] text-[var(--ink)] w-16 text-left">{toFa(grams)} گ</span>
-          </div>
-          <div className="grid grid-cols-4 gap-2 mb-3 text-center font-mono text-[13px]">
-            <div><div className="text-[var(--ink)]">{toFa(Math.round(product.kcal * factor))}</div><div className="text-[var(--ink-3)]">کالری</div></div>
-            <div><div className="text-[#C1443B]">{toFa(round(product.protein * factor))}</div><div className="text-[var(--ink-3)]">پروتئین</div></div>
-            <div><div className="text-[#E8A93A]">{toFa(round(product.carb * factor))}</div><div className="text-[var(--ink-3)]">کربو</div></div>
-            <div><div className="text-[#8FA05E]">{toFa(round(product.fat * factor))}</div><div className="text-[var(--ink-3)]">چربی</div></div>
-          </div>
-          <button onClick={() => { onAdd({ id: "barcode-" + Date.now(), name: product.name, grams, kcal: product.kcal * factor, protein: product.protein * factor, carb: product.carb * factor, fat: product.fat * factor }); setProduct(null); setStatus("idle"); setManualCode(""); }}
-            className="w-full bg-[#C1443B] text-white rounded-xl py-2.5 text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition">
-            <ICheck size={16} /> افزودن به لیست امروز
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  فهرست امروز — گروه‌بندی‌شده بر اساس وعده                            */
-/* ------------------------------------------------------------------ */
-
-function TodayList({ entries, onRemove }) {
-  const [openMeals, setOpenMeals] = useState(() => new Set(MEALS.map((m) => m.id)));
-  const [copied, setCopied] = useState(false);
-
-  const copySummary = () => {
-    const totals = entries.reduce((acc, e) => ({
-      kcal: acc.kcal + (e.kcal || 0), protein: acc.protein + (e.protein || 0),
-      carb: acc.carb + (e.carb || 0), fat: acc.fat + (e.fat || 0),
-    }), { kcal: 0, protein: 0, carb: 0, fat: 0 });
-    const lines = entries.map((e) => "- " + e.name + " (" + Math.round(e.grams) + "گ): " + Math.round(e.kcal) + " کالری، پ" + round(e.protein) + " ک" + round(e.carb) + " چ" + round(e.fat));
-    const text = "خلاصه‌ی امروز — سفره‌ی من\n" + lines.join("\n") + "\n\nجمع: " + Math.round(totals.kcal) + " کالری | پروتئین " + round(totals.protein) + "گ | کربو " + round(totals.carb) + "گ | چربی " + round(totals.fat) + "گ";
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
-    }
-  };
-
-  const grouped = useMemo(() => {
-    const g = {};
-    MEALS.forEach((m) => (g[m.id] = []));
-    entries.forEach((e) => g[e.meal || "mianvade"].push(e));
-    return g;
-  }, [entries]);
-
-  const toggle = (id) => setOpenMeals((prev) => {
-    const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  });
-
-  if (entries.length === 0) {
-    return (
-      <div className="text-center text-[var(--ink-3)] text-[14px] py-10 border border-dashed border-[var(--card-border)] rounded-2xl">
-        هنوز چیزی ثبت نشده. از تب «افزودن»، «اسکن عکس» یا «بارکد» شروع کن.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <button onClick={copySummary}
-        className="w-full flex items-center justify-center gap-1.5 bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-xl py-2 text-[13.5px] text-[var(--ink-2)] active:scale-[0.98] transition">
-        <ICopy size={13} /> {copied ? "کپی شد ✓" : "کپی خلاصه‌ی امروز"}
+      <button disabled={!image || status === "loading"} onClick={analyze} className="w-full bg-[#E8A93A] text-[#1C1610] font-medium rounded-xl py-3 text-[15px] disabled:opacity-40 active:scale-[0.98] transition flex items-center justify-center gap-2">
+        {status === "loading" ? <><ILoader size={16} className="animate-spin" /> در حال تحلیل...</> : "تشخیص غذا و محاسبه ماکرو"}
       </button>
-      {MEALS.map((meal) => {
-        const items = grouped[meal.id];
-        if (items.length === 0) return null;
-        const kcalSum = items.reduce((s, e) => s + (e.kcal || 0), 0);
-        const MIcon = meal.Icon;
-        const open = openMeals.has(meal.id);
-        return (
-          <div key={meal.id} className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl overflow-hidden">
-            <button onClick={() => toggle(meal.id)} className="w-full flex items-center justify-between px-3.5 py-3">
-              <div className="flex items-center gap-2">
-                <MIcon size={15} className="text-[#E8A93A]" />
-                <span className="text-[14.5px] text-[var(--ink)]">{meal.label}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[13px] text-[var(--ink-2)]">{toFa(Math.round(kcalSum))} کالری</span>
-                <IChevronDown size={15} className={"text-[var(--ink-3)] transition-transform " + (open ? "rotate-180" : "")} />
-              </div>
-            </button>
-            <Collapse open={open}>
-              <div className="border-t border-[var(--card-border)]">
-                {items.map((e, idx) => (
-                  <div key={e.id} className="flex items-center justify-between px-3.5 py-2.5 border-b border-black/5 last:border-b-0 sheet-in" style={{ animationDelay: (idx * 40) + "ms" }}>
-                    <div>
-                      <div className="text-[14.5px] text-[var(--ink)]">{e.name}</div>
-                      <div className="text-[12px] text-[var(--ink-2)] font-mono">
-                        {toFa(Math.round(e.grams))}گ · {toFa(Math.round(e.kcal))}ک · پ{toFa(round(e.protein))} · ک{toFa(round(e.carb))} · چ{toFa(round(e.fat))}
-                      </div>
-                    </div>
-                    <button onClick={() => onRemove(e)} className="text-[var(--ink-3)] p-1"><ITrash size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            </Collapse>
+
+      {result && (
+        <div className="mt-4 bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[16px] font-semibold text-[var(--ink)]">{result.name}</div>
+            <span className="text-[11px] text-[var(--ink-3)]">اعتماد: {result.confidence || "medium"}</span>
           </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  ثبت وزن بدن — روند وزن مثل اپ‌های حرفه‌ای مثل MacroFactor/Cronometer */
-/* ------------------------------------------------------------------ */
-
-function WeightTracker() {
-  const [weights, setWeights] = useState(() => storageGet("weights", []));
-  const [value, setValue] = useState("");
-
-  const sorted = useMemo(() => [...weights].sort((a, b) => a.date.localeCompare(b.date)), [weights]);
-  const last10 = sorted.slice(-10);
-  const latest = sorted[sorted.length - 1];
-  const prev = sorted[sorted.length - 2];
-  const delta = latest && prev ? round(latest.kg - prev.kg) : null;
-
-  const logToday = () => {
-    const kg = Number(value);
-    if (!kg || kg <= 0) return;
-    const today = dateKey(new Date());
-    const next = [...weights.filter((w) => w.date !== today), { date: today, kg }];
-    setWeights(next);
-    storageSet("weights", next);
-    setValue("");
-  };
-
-  const max = Math.max(...last10.map((w) => w.kg), 1);
-  const min = Math.min(...last10.map((w) => w.kg), max - 1);
-  const range = Math.max(max - min, 1);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <IScale size={13} className="text-[#E8A93A]" />
-          <span className="text-[13.5px] text-[var(--ink-2)]">روند وزن</span>
-        </div>
-        {latest && (
-          <span className="font-mono text-[13px] text-[var(--ink)]">
-            {toFa(latest.kg)} کیلوگرم
-            {delta !== null && <span className={delta > 0 ? " text-[#C1443B]" : delta < 0 ? " text-[#8FA05E]" : ""}> ({delta > 0 ? "+" : ""}{toFa(delta)})</span>}
-          </span>
-        )}
-      </div>
-      {last10.length > 1 && (
-        <div className="flex items-end gap-1.5 h-14 mb-3">
-          {last10.map((w, i) => {
-            const h = Math.max(((w.kg - min) / range) * 100, 8);
-            return <div key={i} className="flex-1 rounded-t-md bg-[#E8A93A]" style={{ height: h + "%", opacity: 0.4 + (i / last10.length) * 0.6 }} />;
-          })}
-        </div>
-      )}
-      <div className="flex items-center gap-2">
-        <input type="number" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="مثلاً ۷۲.۵"
-          className="flex-1 bg-black/5 border border-[var(--card-border)] rounded-lg px-3 py-2 text-[14px] text-[var(--ink)] outline-none font-mono" />
-        <button onClick={logToday} className="bg-[#E8A93A] text-[#1C1610] rounded-lg px-3 py-2 text-[13.5px] font-medium active:scale-[0.98] transition">ثبت وزن امروز</button>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  وعده‌های ذخیره‌شده — ترکیب چند غذا و ثبت یک‌جا (مثل رسپی‌های          */
-/*  خانگی در Cronometer)                                                */
-/* ------------------------------------------------------------------ */
-
-function MealBuilderItemRow({ item, onUpdateGrams, onRemove }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="bg-[var(--card-bg-soft)] border border-[var(--card-border)] rounded-lg px-3 py-2 sheet-in">
-      <div className="flex items-center gap-2">
-        <button onClick={() => setOpen((o) => !o)} className="flex-1 text-right">
-          <span className="text-[14px] text-[var(--ink)] font-medium">{item.name}</span>
-          <span className="text-[12px] text-[var(--ink-3)] font-mono block">{toFa(item.grams)} گرم</span>
-        </button>
-        <IChevronDown size={14} className={"text-[var(--ink-3)] transition-transform duration-200 " + (open ? "rotate-180" : "")} onClick={() => setOpen((o) => !o)} />
-        <button onClick={onRemove}><IX size={14} className="text-[var(--ink-3)]" /></button>
-      </div>
-      <Collapse open={open}>
-        <div className="mt-2.5 pt-2.5 border-t border-black/5">
-          <UnitQtyControl cat={item.cat} grams={item.grams} onGramsChange={onUpdateGrams} />
-        </div>
-      </Collapse>
-    </div>
-  );
-}
-
-function MealBuilderModal({ onClose, onSave }) {
-  const [query, setQuery] = useState("");
-  const [name, setName] = useState("");
-  const [items, setItems] = useState([]);
-
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    return FOOD_DB.filter((f) => f.name.includes(query.trim())).slice(0, 12);
-  }, [query]);
-
-  const addItem = (food) => {
-    if (items.some((i) => i.id === food.id)) return;
-    setItems((prev) => [...prev, { ...food, grams: 100 }]);
-    setQuery("");
-  };
-  const updateGrams = (id, grams) => setItems((prev) => prev.map((i) => (i.id === id ? { ...i, grams } : i)));
-  const removeItem = (id) => setItems((prev) => prev.filter((i) => i.id !== id));
-
-  const totals = items.reduce((acc, i) => {
-    const f = i.grams / 100;
-    return { kcal: acc.kcal + i.kcal * f, protein: acc.protein + i.protein * f, carb: acc.carb + i.carb * f, fat: acc.fat + i.fat * f };
-  }, { kcal: 0, protein: 0, carb: 0, fat: 0 });
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md mx-auto bg-[var(--modal-bg)] border-t border-[var(--card-border)] rounded-t-3xl p-5 max-h-[88vh] overflow-y-auto modal-sheet">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-[16px] text-[var(--ink)] font-medium">ساخت وعده‌ی من</span>
-          <button onClick={onClose}><IX size={18} className="text-[var(--ink-2)]" /></button>
-        </div>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسم وعده؛ مثلاً «صبحانه‌ی من»"
-          className="w-full bg-black/5 border border-[var(--card-border)] rounded-lg px-3 py-2 text-[14px] text-[var(--ink)] outline-none mb-3" />
-        <div className="flex items-center gap-2 bg-black/5 border border-[var(--card-border)] rounded-xl px-3 py-2 mb-2">
-          <ISearch size={15} className="text-[var(--ink-2)] shrink-0" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="غذا را جستجو و اضافه کن"
-            className="bg-transparent outline-none text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-3)] w-full" />
-        </div>
-        {results.length > 0 && (
-          <div className="border border-[var(--card-border)] rounded-xl mb-3 overflow-hidden max-h-40 overflow-y-auto">
-            {results.map((f) => (
-              <button key={f.id} onClick={() => addItem(f)} className="w-full text-right px-3 py-2 text-[14px] text-[var(--ink)] border-b border-black/5 last:border-b-0 bg-[var(--card-bg-soft)]">
-                {f.name}
-              </button>
+          <p className="text-[12px] text-[var(--ink-2)] mb-4">{result.note || "مقادیر تخمینی هستند."}</p>
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {[["کالری", result.kcal, "kcal"], ["پروتئین", result.protein, "g"], ["کربوهیدرات", result.carb, "g"], ["چربی", result.fat, "g"]].map(([label, value, unit]) => (
+              <div key={label} className="bg-black/5 rounded-xl p-2 text-center">
+                <div className="text-[10px] text-[var(--ink-3)]">{label}</div>
+                <div className="font-mono text-[14px] text-[var(--ink)]">{Number(value || 0).toFixed(1)}{unit === "kcal" ? "" : ""}</div>
+                <div className="text-[9px] text-[var(--ink-3)]">{unit}</div>
+              </div>
             ))}
           </div>
-        )}
-        {items.length > 0 && (
-          <div className="space-y-2 mb-3">
-            {items.map((i) => <MealBuilderItemRow key={i.id} item={i} onUpdateGrams={(g) => updateGrams(i.id, g)} onRemove={() => removeItem(i.id)} />)}
-            <div className="text-[13px] text-[var(--ink-2)] font-mono text-center pt-1">
-              جمع: {toFa(Math.round(totals.kcal))} کالری · پ{toFa(round(totals.protein))} · ک{toFa(round(totals.carb))} · چ{toFa(round(totals.fat))}
-            </div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[13px] text-[var(--ink-2)]">وزن:</span>
+            <input type="number" min="1" value={grams} onChange={(e) => setGrams(Number(e.target.value) || 1)} className="w-24 bg-[var(--input-bg)] border border-[var(--card-border)] rounded-lg px-2 py-1.5 text-[14px] text-[var(--ink)] font-mono text-center" />
+            <span className="text-[13px] text-[var(--ink-2)]">گرم</span>
           </div>
-        )}
-        <button
-          disabled={!name.trim() || items.length === 0}
-          onClick={() => { onSave({ id: "meal-" + Date.now(), name: name.trim(), items }); onClose(); }}
-          className="w-full bg-[#8FA05E] text-[#1C1610] font-medium rounded-xl py-2.5 text-[15px] disabled:opacity-40 active:scale-[0.98] transition"
-        >
-          ذخیره‌ی وعده
-        </button>
-      </div>
+          <div className="text-[12px] text-[var(--ink-2)] mb-3">برای این مقدار: {Math.round((result.kcal || 0) * factor)} kcal · پروتئین {((result.protein || 0) * factor).toFixed(1)}g · کربوهیدرات {((result.carb || 0) * factor).toFixed(1)}g · چربی {((result.fat || 0) * factor).toFixed(1)}g</div>
+          <button onClick={() => onAdd({ id: "ai-" + Date.now(), name: result.name, kcal: (result.kcal || 0) * factor, protein: (result.protein || 0) * factor, carb: (result.carb || 0) * factor, fat: (result.fat || 0) * factor, grams, meal: "snack", source: "ai" })} className="w-full bg-[#8FA05E] text-[#1C1610] font-medium rounded-xl py-2.5 text-[14px]">افزودن به امروز</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1625,13 +1198,70 @@ function MealBuilderModal({ onClose, onSave }) {
 /*  اپلیکیشن اصلی                                                       */
 /* ------------------------------------------------------------------ */
 
+function ChatAssistantTab({ targets, entries }) {
+  const [messages, setMessages] = useState(() => storageGet("aiChat", [{ role: "assistant", content: "سلام. من دستیار تغذیه‌ی «سفره‌ی من» هستم. درباره‌ی کالری، ماکروها و انتخاب غذا از من بپرس." }]));
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    storageSet("aiChat", messages);
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    const next = [...messages, { role: "user", content: text }];
+    setMessages(next);
+    setInput("");
+    setLoading(true);
+    try {
+      const recentEntries = entries.slice(-20).map((e) => ({ name: e.name, grams: e.grams, kcal: e.kcal, protein: e.protein, carb: e.carb, fat: e.fat }));
+      const data = await callAI({
+        action: "chat",
+        messages: next.slice(-12),
+        context: { targets, today: recentEntries },
+      });
+      setMessages((prev) => [...prev, { role: "assistant", content: data.text || "پاسخی دریافت نشد." }]);
+    } catch (e) {
+      console.error(e);
+      setMessages((prev) => [...prev, { role: "assistant", content: "خطا در اتصال به دستیار. تنظیمات سرور API را بررسی کن." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clear = () => setMessages([{ role: "assistant", content: "گفت‌وگو پاک شد. سؤال جدیدت را بپرس." }]);
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-190px)] min-h-[520px]">
+      <div className="flex items-center justify-between mb-3">
+        <div><div className="text-[18px] font-semibold text-[var(--ink)]">دستیار تغذیه</div><div className="text-[11px] text-[var(--ink-3)]">مخصوص کالری و غذاهای ایرانی</div></div>
+        <button onClick={clear} className="text-[12px] text-[var(--ink-2)] bg-[var(--input-bg-strong)] rounded-lg px-3 py-1.5">پاک کردن</button>
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1 mb-3">
+        {messages.map((m, i) => (
+          <div key={i} className={"flex " + (m.role === "user" ? "justify-start" : "justify-end")}>
+            <div className={(m.role === "user" ? "bg-[#E8A93A] text-[#1C1610]" : "bg-[var(--card-bg)] text-[var(--ink)] border border-[var(--card-border)]") + " rounded-2xl px-3.5 py-2.5 max-w-[88%] text-[13px] leading-7 whitespace-pre-wrap"}>{m.content}</div>
+          </div>
+        ))}
+        {loading && <div className="flex justify-end"><div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl px-4 py-3"><ILoader size={16} className="animate-spin text-[var(--ink-2)]" /></div></div>}
+        <div ref={endRef} />
+      </div>
+      <div className="flex gap-2 bg-[var(--card-bg-strong)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-2">
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="مثلاً: برای ۱۸۰۰ کالری چه بخورم؟" className="flex-1 bg-transparent px-2 text-[13px] text-[var(--ink)] outline-none" />
+        <button onClick={send} disabled={!input.trim() || loading} className="bg-[#8FA05E] text-[#1C1610] rounded-xl px-4 py-2 text-[13px] font-medium disabled:opacity-40">ارسال</button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [date, setDate] = useState(new Date());
   const [entries, setEntries] = useState(() => storageGet("log:" + dateKey(new Date()), []));
   const [targets, setTargets] = useState(() => storageGet("targets", DEFAULT_TARGETS));
   const [frequency, setFrequency] = useState(() => storageGet("frequency", {}));
-  const [apiKey, setApiKey] = useState(() => storageGet("apiKey", ""));
-  const [apiProvider, setApiProvider] = useState(() => storageGet("apiProvider", "gemini"));
   const [theme, setTheme] = useState(() => storageGet("theme", "light"));
 
   useEffect(() => {
@@ -1785,13 +1415,13 @@ function App() {
 
   const changeDay = (delta) => { const d = new Date(date); d.setDate(d.getDate() + delta); setDate(d); };
   const saveTargets = (t) => { setTargets(t); storageSet("targets", t); setShowTargets(false); };
-  const saveApiKey = (k, provider) => { setApiKey(k); storageSet("apiKey", k); setApiProvider(provider); storageSet("apiProvider", provider); };
 
   const TABS = [
     { id: "today", label: "امروز", Icon: IUtensils },
     { id: "add", label: "افزودن", Icon: IPlus },
     { id: "photo", label: "اسکن عکس", Icon: ICamera },
     { id: "barcode", label: "بارکد", Icon: IBarcode },
+    { id: "ai", label: "دستیار", Icon: IMessage },
   ];
 
   return (
@@ -1878,8 +1508,9 @@ function App() {
               onSaveCustomFood={saveCustomFood}
             />
           )}
-          {tab === "photo" && <PhotoScanTab onAdd={addEntry} apiKey={apiKey} apiProvider={apiProvider} onNeedKey={() => setShowTargets(true)} />}
+          {tab === "photo" && <PhotoScanTab onAdd={addEntry} />}
           {tab === "barcode" && <BarcodeScanTab onAdd={addEntry} />}
+          {tab === "ai" && <ChatAssistantTab targets={targets} entries={entries} />}
         </div>
       </div>
 
@@ -1888,9 +1519,9 @@ function App() {
       )}
 
       <div className="fixed bottom-0 inset-x-0 bg-[var(--card-bg-strong)] backdrop-blur-xl border-t border-[var(--card-border)] z-10">
-        <div className="max-w-md mx-auto grid grid-cols-4 relative">
+        <div className="max-w-md mx-auto grid grid-cols-5 relative">
           <span className="absolute top-0 h-[3px] rounded-full bg-[#E8A93A] transition-all duration-300"
-            style={{ width: "25%", right: (TABS.findIndex((t) => t.id === tab) * 25) + "%" }} />
+            style={{ width: "20%", right: (TABS.findIndex((t) => t.id === tab) * 20) + "%" }} />
           {TABS.map((t) => {
             const TIcon = t.Icon;
             const active = tab === t.id;
@@ -1913,7 +1544,7 @@ function App() {
               <span className="text-[16px] text-[var(--ink)] font-medium">تنظیمات</span>
               <button onClick={() => setShowTargets(false)}><IX size={18} className="text-[var(--ink-2)]" /></button>
             </div>
-            <TargetsForm targets={targets} onSave={saveTargets} apiKey={apiKey} apiProvider={apiProvider} onSaveKey={saveApiKey} onExport={exportBackup} onImport={importBackup} theme={theme} onSetTheme={setTheme} />
+            <TargetsForm targets={targets} onSave={saveTargets} onExport={exportBackup} onImport={importBackup} theme={theme} onSetTheme={setTheme} />
           </div>
         </div>
       )}
@@ -1921,10 +1552,8 @@ function App() {
   );
 }
 
-function TargetsForm({ targets, onSave, apiKey, apiProvider, onSaveKey, onExport, onImport, theme, onSetTheme }) {
+function TargetsForm({ targets, onSave, onExport, onImport, theme, onSetTheme }) {
   const [t, setT] = useState(targets);
-  const [key, setKey] = useState(apiKey || "");
-  const [provider, setProvider] = useState(apiProvider || "gemini");
   const importInputRef = useRef(null);
   const THEMES = [
     { id: "light", label: "روشن", colors: ["#F6F0E4", "#E8A93A", "#C1443B"] },
@@ -1960,35 +1589,8 @@ function TargetsForm({ targets, onSave, apiKey, apiProvider, onSaveKey, onExport
         <button onClick={() => onSave(t)} className="w-full bg-[#E8A93A] text-[#1C1610] font-medium rounded-xl py-2.5 text-[15px] active:scale-[0.98] transition">ذخیره هدف‌ها</button>
       </div>
       <div className="space-y-2 pt-2 border-t border-[var(--card-border)]">
-        <div className="text-[13px] text-[var(--ink-2)] pt-3">هوش مصنوعی برای اسکن عکس</div>
-        <div className="grid grid-cols-3 gap-2">
-          <button onClick={() => setProvider("gemini")}
-            className={"rounded-xl py-2.5 text-[12.5px] font-medium transition-all " + (provider === "gemini" ? "bg-[#8FA05E] text-[#1C1610]" : "bg-[var(--input-bg-strong)] text-[var(--ink)]")}>
-            Gemini (رایگان)
-          </button>
-          <button onClick={() => setProvider("openai")}
-            className={"rounded-xl py-2.5 text-[12.5px] font-medium transition-all " + (provider === "openai" ? "bg-[#8FA05E] text-[#1C1610]" : "bg-[var(--input-bg-strong)] text-[var(--ink)]")}>
-            ChatGPT
-          </button>
-          <button onClick={() => setProvider("claude")}
-            className={"rounded-xl py-2.5 text-[12.5px] font-medium transition-all " + (provider === "claude" ? "bg-[#8FA05E] text-[#1C1610]" : "bg-[var(--input-bg-strong)] text-[var(--ink)]")}>
-            Claude
-          </button>
-        </div>
-        <input type="password" value={key} onChange={(e) => setKey(e.target.value)}
-          placeholder={provider === "gemini" ? "AIza..." : provider === "openai" ? "sk-proj-..." : "sk-ant-..."}
-          className="w-full bg-black/5 border border-[var(--card-border)] rounded-lg px-3 py-2 text-[14px] text-[var(--ink)] outline-none font-mono" />
-        {provider === "gemini" ? (
-          <p className="text-[12px] text-[var(--ink-3)]">
-            کلید رایگان Gemini را از <span className="font-mono" dir="ltr">aistudio.google.com/apikey</span> بگیر — نیازی به کارت بانکی یا حساب پولی ندارد.
-          </p>
-        ) : provider === "openai" ? (
-          <p className="text-[12px] text-[var(--ink-3)]">کلید OpenAI را از <span className="font-mono" dir="ltr">platform.openai.com/api-keys</span> بگیر. اگر همین حالا کلیدی داری، همین‌جا وارد کن.</p>
-        ) : (
-          <p className="text-[12px] text-[var(--ink-3)]">کلید Anthropic نیازمند حساب دارای اعتبار مالی است.</p>
-        )}
-        <p className="text-[12px] text-[var(--ink-3)]">کلید فقط در حافظه‌ی همین مرورگر ذخیره می‌شود و مستقیماً به سرور همان سرویس ارسال می‌شود.</p>
-        <button onClick={() => onSaveKey(key, provider)} className="w-full bg-[var(--input-bg-strong)] text-[var(--ink)] font-medium rounded-xl py-2.5 text-[15px] active:scale-[0.98] transition">ذخیره کلید</button>
+        <div className="text-[13px] text-[var(--ink-2)] pt-3">هوش مصنوعی</div>
+        <p className="text-[12px] text-[var(--ink-3)]">اسکن عکس و دستیار تغذیه از ChatGPT استفاده می‌کنند. کلید API داخل این اپ ذخیره یا در کد frontend قرار نگرفته است؛ سرور واسط آن را به‌صورت Secret نگه می‌دارد.</p>
       </div>
       <div className="space-y-2 pt-2 border-t border-[var(--card-border)]">
         <div className="text-[13px] text-[var(--ink-2)] pt-3">پشتیبان‌گیری</div>

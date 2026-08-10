@@ -1,0 +1,1 @@
+window.AI_API_URL = "https://YOUR-WORKER.workers.dev";
