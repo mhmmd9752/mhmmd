@@ -1,5 +1,6 @@
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createRoot } from "react-dom/client";
 
-const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
 /* ------------------------------------------------------------------ */
 /*  آیکون‌های SVG ساده (بدون وابستگی خارجی)                              */
@@ -40,20 +41,41 @@ const IScale = (p) => <Icon {...p} path={<><path d="M12 3v18"/><path d="M5 7h14"
 const IBookmark = (p) => <Icon {...p} path={<path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/>} />;
 const IMessage = (p) => <Icon {...p} path={<><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.2-.6L4 20l1.6-3.7A7.3 7.3 0 0 1 4.5 12 7.5 7.5 0 0 1 12 4.5h.5A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></>} />;
 
-const AI_API_URL = window.AI_API_URL || "https://sofreyeman.mhmmdkarimnejad.workers.dev";
+const AI_API_URL = String(window.AI_API_URL || "").replace(/\/$/, "");
 
 async function callAI(payload) {
   if (!AI_API_URL || AI_API_URL.includes("YOUR-WORKER")) {
     throw new Error("AI_API_URL is not configured");
   }
-  const response = await fetch(AI_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || ("network " + response.status));
-  return data;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+
+  try {
+    const response = await fetch(AI_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const raw = await response.text();
+    let data = {};
+    try { data = raw ? JSON.parse(raw) : {}; } catch (_) {}
+
+    if (!response.ok) {
+      throw new Error(data.error || `network ${response.status}`);
+    }
+
+    return data;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("زمان پاسخ‌گویی هوش مصنوعی بیش از حد طول کشید.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -719,7 +741,7 @@ function Collapse({ open, children }) {
   );
 }
 const round = (n) => Math.round(n * 10) / 10;
-const dateKey = (d) => d.toISOString().slice(0, 10);
+const dateKey = (d) => {\n  const y = d.getFullYear();\n  const m = String(d.getMonth() + 1).padStart(2, "0");\n  const day = String(d.getDate()).padStart(2, "0");\n  return `${y}-${m}-${day}`;\n};
 const faDate = (d) => new Intl.DateTimeFormat("fa-IR", { weekday: "long", day: "numeric", month: "long" }).format(d);
 const faDateShort = (d) => new Intl.DateTimeFormat("fa-IR", { weekday: "short" }).format(d);
 const isToday = (d) => dateKey(d) === dateKey(new Date());
@@ -1095,7 +1117,7 @@ function AddFoodTab({ onAdd, frequent, savedMeals, onAddSavedMeal, onDeleteSaved
 }
 
 /* ------------------------------------------------------------------ */
-/*  تب اسکن عکس غذا با هوش مصنوعی (نیازمند کلید API آنتروپیک)           */
+/*  تب اسکن عکس غذا با هوش مصنوعی — کلید فقط روی Cloudflare Worker نگهداری می‌شود */
 /* ------------------------------------------------------------------ */
 
 function PhotoScanTab({ onAdd }) {
@@ -1336,6 +1358,345 @@ function TodayList({ entries, onRemove }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+
+function WeightTracker() {
+  const [items, setItems] = useState(() => storageGet("weights", []));
+  const [weight, setWeight] = useState("");
+  const [date, setDate] = useState(() => dateKey(new Date()));
+
+  const save = () => {
+    const value = Number(weight);
+    if (!Number.isFinite(value) || value <= 0 || value > 500) return;
+
+    setItems((prev) => {
+      const next = [...prev.filter((x) => x.date !== date), { date, weight: value }]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-90);
+      storageSet("weights", next);
+      return next;
+    });
+    setWeight("");
+  };
+
+  const remove = (targetDate) => {
+    setItems((prev) => {
+      const next = prev.filter((x) => x.date !== targetDate);
+      storageSet("weights", next);
+      return next;
+    });
+  };
+
+  const recent = items.slice(-7).reverse();
+  const latest = items[items.length - 1]?.weight;
+  const previous = items.length > 1 ? items[items.length - 2]?.weight : null;
+  const delta = latest != null && previous != null ? latest - previous : null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-[13.5px] text-[var(--ink)] font-medium">پیگیری وزن</div>
+          <div className="text-[11px] text-[var(--ink-3)]">ثبت وزن روی همین مرورگر ذخیره می‌شود.</div>
+        </div>
+        {latest != null && (
+          <div className="text-left">
+            <div className="font-mono text-[17px] text-[var(--ink)]">{toFa(latest)} kg</div>
+            {delta != null && (
+              <div className={"text-[11px] font-mono " + (delta > 0 ? "text-[#C1443B]" : delta < 0 ? "text-[#5C7A3E]" : "text-[var(--ink-3)]")}>
+                {delta > 0 ? "+" : ""}{toFa(round(delta))} kg
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-2 mb-3">
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="min-w-0 bg-[var(--input-bg)] border border-[var(--card-border)] rounded-lg px-2 py-2 text-[12px] text-[var(--ink)]"
+        />
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.1"
+          min="1"
+          max="500"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+          placeholder="وزن (kg)"
+          className="min-w-0 bg-[var(--input-bg)] border border-[var(--card-border)] rounded-lg px-2 py-2 text-[13px] text-[var(--ink)] font-mono"
+        />
+        <button onClick={save} className="bg-[#E8A93A] text-[#1C1610] rounded-lg px-3 py-2 text-[13px] font-medium">
+          ثبت
+        </button>
+      </div>
+
+      {recent.length === 0 ? (
+        <div className="text-[12px] text-[var(--ink-3)] text-center py-3">هنوز وزنی ثبت نشده است.</div>
+      ) : (
+        <div className="space-y-1.5">
+          {recent.map((item) => (
+            <div key={item.date} className="flex items-center justify-between bg-[var(--input-bg)] rounded-lg px-3 py-2">
+              <span className="text-[12px] text-[var(--ink-2)]">{item.date}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[13px] text-[var(--ink)]">{toFa(item.weight)} kg</span>
+                <button onClick={() => remove(item.date)} className="text-[var(--ink-3)]" aria-label="حذف">
+                  <IX size={12} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarcodeScanTab({ onAdd }) {
+  const [code, setCode] = useState("");
+  const [status, setStatus] = useState("idle");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanTimerRef = useRef(null);
+
+  const stopCamera = useCallback(() => {
+    if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+    scanTimerRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }, []);
+
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
+  const findLocal = (value) => {
+    const normalized = String(value || "").trim();
+    const match = FOOD_DB.find((f) => f.barcode && String(f.barcode) === normalized);
+    if (match) {
+      setResult(match);
+      setStatus("found");
+      return;
+    }
+    setResult(null);
+    setStatus("not-found");
+  };
+
+  const startCamera = async () => {
+    setError("");
+    setStatus("starting");
+
+    if (!("BarcodeDetector" in window)) {
+      setStatus("unsupported");
+      setError("مرورگر فعلی BarcodeDetector را پشتیبانی نمی‌کند. بارکد را دستی وارد کن.");
+      return;
+    }
+
+    try {
+      const detector = new window.BarcodeDetector();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setStatus("scanning");
+
+      const scan = async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          scanTimerRef.current = setTimeout(scan, 250);
+          return;
+        }
+        try {
+          const codes = await detector.detect(videoRef.current);
+          if (codes.length) {
+            const value = codes[0].rawValue || "";
+            setCode(value);
+            stopCamera();
+            findLocal(value);
+            return;
+          }
+        } catch (_) {}
+        scanTimerRef.current = setTimeout(scan, 250);
+      };
+      scan();
+    } catch (e) {
+      setStatus("error");
+      setError(e?.message || "دسترسی به دوربین امکان‌پذیر نیست.");
+      stopCamera();
+    }
+  };
+
+  const addFound = () => {
+    if (!result) return;
+    onAdd({ ...result, grams: 100 });
+    setResult(null);
+    setCode("");
+    setStatus("idle");
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <IBarcode size={18} className="text-[#E8A93A]" />
+          <div className="text-[15px] font-medium text-[var(--ink)]">اسکن بارکد</div>
+        </div>
+        <p className="text-[12px] text-[var(--ink-2)] leading-6">
+          بارکد را با دوربین اسکن کن یا شماره‌ی آن را دستی وارد کن. پایگاه فعلی فقط بارکدهایی را که در بانک غذا تعریف شده‌اند شناسایی می‌کند.
+        </p>
+
+        <div className="flex gap-2 mt-3">
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            inputMode="numeric"
+            placeholder="مثلاً 626..."
+            className="flex-1 bg-[var(--input-bg)] border border-[var(--card-border)] rounded-xl px-3 py-2.5 text-[14px] text-[var(--ink)] font-mono"
+          />
+          <button onClick={() => findLocal(code)} className="bg-[#E8A93A] text-[#1C1610] rounded-xl px-4 text-[13px] font-medium">
+            بررسی
+          </button>
+        </div>
+
+        <div className="flex gap-2 mt-2">
+          <button onClick={startCamera} disabled={status === "scanning" || status === "starting"} className="flex-1 bg-[var(--input-bg-strong)] text-[var(--ink)] rounded-xl py-2.5 text-[13px]">
+            <ICamera size={14} className="inline ml-1" /> شروع دوربین
+          </button>
+          {status === "scanning" && (
+            <button onClick={() => { stopCamera(); setStatus("idle"); }} className="bg-[#C1443B] text-white rounded-xl px-4 text-[13px]">
+              توقف
+            </button>
+          )}
+        </div>
+
+        {status === "scanning" && (
+          <video ref={videoRef} muted playsInline className="w-full rounded-xl mt-3 bg-black aspect-video object-cover" />
+        )}
+
+        {error && <div className="text-[12px] text-[#C1443B] mt-2">{error}</div>}
+      </div>
+
+      {result && (
+        <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-4">
+          <div className="text-[15px] text-[var(--ink)] font-medium">{result.name}</div>
+          <div className="text-[12px] text-[var(--ink-2)] font-mono mt-1">
+            {toFa(result.kcal)} kcal / 100g · P {toFa(result.protein)} · C {toFa(result.carb)} · F {toFa(result.fat)}
+          </div>
+          <button onClick={addFound} className="w-full mt-3 bg-[#8FA05E] text-[#1C1610] rounded-xl py-2.5 text-[13px] font-medium">
+            افزودن به امروز
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MealBuilderModal({ onClose, onSave }) {
+  const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState([]);
+
+  const foods = useMemo(() => {
+    const q = query.trim();
+    return (q ? FOOD_DB.filter((f) => f.name.includes(q)) : FOOD_DB).slice(0, 80);
+  }, [query]);
+
+  const toggle = (food) => {
+    setSelected((prev) => {
+      const exists = prev.find((x) => x.id === food.id);
+      if (exists) return prev.filter((x) => x.id !== food.id);
+      return [...prev, { ...food, grams: 100 }];
+    });
+  };
+
+  const setGrams = (id, grams) => {
+    setSelected((prev) => prev.map((x) => x.id === id ? { ...x, grams: Math.max(1, Number(grams) || 1) } : x));
+  };
+
+  const save = () => {
+    if (!name.trim() || selected.length === 0) return;
+    const items = selected.map((x) => {
+      const factor = x.grams / 100;
+      return {
+        ...x,
+        id: "meal-" + Date.now() + "-" + Math.random().toString(36).slice(2),
+        kcal: x.kcal * factor,
+        protein: x.protein * factor,
+        carb: x.carb * factor,
+        fat: x.fat * factor,
+      };
+    });
+    onSave({ id: "saved-" + Date.now(), name: name.trim(), items });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md max-h-[88vh] overflow-hidden bg-[var(--modal-bg)] rounded-t-3xl p-4 modal-sheet">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[16px] font-medium text-[var(--ink)]">ساخت وعده‌ی ذخیره‌شده</div>
+          <button onClick={onClose}><IX size={18} className="text-[var(--ink-2)]" /></button>
+        </div>
+
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="مثلاً صبحانه‌ی همیشگی"
+          className="w-full bg-[var(--input-bg)] border border-[var(--card-border)] rounded-xl px-3 py-2.5 text-[14px] text-[var(--ink)] mb-2"
+        />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="جستجوی غذا برای اضافه‌کردن..."
+          className="w-full bg-[var(--input-bg)] border border-[var(--card-border)] rounded-xl px-3 py-2.5 text-[13px] text-[var(--ink)] mb-3"
+        />
+
+        <div className="max-h-[42vh] overflow-y-auto space-y-1">
+          {foods.map((food) => {
+            const item = selected.find((x) => x.id === food.id);
+            return (
+              <div key={food.id} className="flex items-center gap-2 py-2 border-b border-[var(--card-border)]">
+                <button onClick={() => toggle(food)} className={"w-7 h-7 rounded-lg border flex items-center justify-center " + (item ? "bg-[#E8A93A] border-[#E8A93A]" : "border-[var(--card-border)]")}>
+                  {item && <ICheck size={15} />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] text-[var(--ink)] truncate">{food.name}</div>
+                  <div className="text-[10px] text-[var(--ink-3)] font-mono">{toFa(food.kcal)} kcal/100g</div>
+                </div>
+                {item && (
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={item.grams}
+                    onChange={(e) => setGrams(food.id, e.target.value)}
+                    className="w-20 bg-[var(--input-bg)] rounded-lg px-2 py-1.5 text-[12px] text-[var(--ink)] font-mono text-center"
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--card-border)]">
+          <span className="text-[12px] text-[var(--ink-2)]">{toFa(selected.length)} قلم انتخاب شده</span>
+          <button disabled={!name.trim() || selected.length === 0} onClick={save} className="bg-[#E8A93A] disabled:opacity-40 text-[#1C1610] rounded-xl px-5 py-2.5 text-[13px] font-medium">
+            ذخیره وعده
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1694,5 +2055,5 @@ function TargetsForm({ targets, onSave, onExport, onImport, theme, onSetTheme })
 }
 
 window.__APP_MOUNTED__ = true;
-document.getElementById("root").innerHTML = "";
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+document.getElementById("root").replaceChildren();
+createRoot(document.getElementById("root")).render(<App />);

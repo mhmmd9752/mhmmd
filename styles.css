@@ -1,3 +1,8 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
   :root {
     --ink: #241A10;
     --ink-2: #7A6A52;
@@ -62,7 +67,7 @@
     --bg-g4: rgba(45,156,178,0.14);
   }
   body {
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: system-ui, "Segoe UI", Tahoma, Arial, sans-serif;
     background-color: var(--bg-solid);
     background-image:
       radial-gradient(circle at 12% 18%, var(--bg-g1), transparent 42%),
@@ -73,7 +78,7 @@
     min-height: 100vh;
     transition: background-color .4s ease;
   }
-  .font-mono { font-family: 'IBM Plex Mono', monospace; direction: ltr; unicode-bidi: plaintext; }
+  .font-mono { font-family: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace; direction: ltr; unicode-bidi: plaintext; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .backdrop-blur-xl { -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }

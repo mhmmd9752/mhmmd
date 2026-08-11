@@ -1,38 +1,43 @@
-# اتصال امن OpenAI برای «سفره‌ی من»
+# سفره‌ی من
 
-این نسخه کلید OpenAI را از frontend حذف کرده است. کلید باید فقط به‌عنوان Secret روی Cloudflare Worker ذخیره شود.
+نسخه‌ی فعلی به‌صورت یک سایت استاتیک روی GitHub Pages ساخته می‌شود.
 
-## 1) Frontend
+## ساختار
 
-در `api-config.js` این خط را با آدرس Worker خودت عوض کن:
+- `app.jsx` — سورس React و JSX
+- `index.html` — پوسته‌ی HTML
+- `styles.css` — استایل‌های اختصاصی
+- `tailwind.input.css` — ورودی Tailwind
+- `api-config.js` — فقط URL عمومی Cloudflare Worker
+- `package.json` — وابستگی‌های build
+- `.github/workflows/pages.yml` — build و deploy خودکار
 
-```js
-window.AI_API_URL = "https://YOUR-WORKER.workers.dev";
-```
+React، ReactDOM، JSX و Tailwind در زمان build روی GitHub آماده می‌شوند. مرورگر کاربر دیگر برای بالا آمدن سایت به CDNهای React/Babel/Tailwind وابسته نیست.
 
-## 2) Cloudflare Worker
+## OpenAI
 
-فایل‌های `worker.js` و `wrangler.jsonc` را در یک پوشه قرار بده. در `wrangler.jsonc` مقدار `ALLOWED_ORIGIN` را با دامنه واقعی سایتت عوض کن، مثلاً:
+کلید OpenAI نباید در GitHub یا frontend قرار بگیرد.
 
-```json
-"ALLOWED_ORIGIN": "https://example.ir"
-```
+در Cloudflare Worker یک Secret با نام زیر نگه‌داری شود:
 
-سپس:
+`OPENAI_API_KEY`
 
-```bash
-npm install -g wrangler
-wrangler login
-wrangler secret put OPENAI_API_KEY
-wrangler deploy
-```
+و Worker باید درخواست‌های `POST` از سایت را به OpenAI منتقل کند.
 
-وقتی دستور `wrangler secret put OPENAI_API_KEY` اجرا شد، کلید `sk-...` را در prompt وارد کن؛ آن را داخل فایل پروژه ننویس.
+URL فعلی Worker:
 
-## 3) GitHub Pages
+`https://sofreyeman.mhmmdkarimnejad.workers.dev`
 
-فایل‌های `index.html`, `app.jsx`, `styles.css`, `api-config.js`, `icon.svg`, و `manifest.json` را در repository قرار بده.
+## GitHub Pages
 
-## نکته امنیتی
+در Repository به مسیر:
 
-`api-config.js` فقط URL عمومی Worker را دارد؛ API key در آن نیست. API key در Cloudflare Secret با نام `OPENAI_API_KEY` قرار می‌گیرد.
+Settings → Pages → Build and deployment → Source
+
+برو و `GitHub Actions` را انتخاب کن.
+
+پس از push به `main`، workflow سایت را build و deploy می‌کند.
+
+## امنیت
+
+`api-config.js` حاوی API key نیست. API key فقط روی Cloudflare Worker نگه‌داری می‌شود.
