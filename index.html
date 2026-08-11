@@ -104,7 +104,10 @@
       loadFirstWorking(SOURCES.tailwind).catch(function () { console.warn("tailwind failed to load from all sources"); });
       await loadFirstWorking(SOURCES.babel);
 
-      var code = await (await fetch("app.jsx")).text();
+      var code = await (await fetch("app.jsx?v=" + Date.now(), {
+  cache: "no-store"
+})).text();
+      
       var compiled = Babel.transform(code, { presets: ["react"] }).code;
       (0, eval)(compiled);
     } catch (err) {
