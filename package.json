@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "build": "npm run build:js && npm run build:css && npm run copy:static",
+    "build": "npm run build:js && npm run copy:static",
     "build:js": "esbuild app.jsx --bundle --format=iife --target=es2020 --minify --outfile=dist/app.js",
     "copy:static": "node build-static.mjs"
   },
