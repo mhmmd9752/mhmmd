@@ -40,7 +40,7 @@ const IScale = (p) => <Icon {...p} path={<><path d="M12 3v18"/><path d="M5 7h14"
 const IBookmark = (p) => <Icon {...p} path={<path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/>} />;
 const IMessage = (p) => <Icon {...p} path={<><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.2-.6L4 20l1.6-3.7A7.3 7.3 0 0 1 4.5 12 7.5 7.5 0 0 1 12 4.5h.5A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></>} />;
 
-const AI_API_URL = window.AI_API_URL || "https://YOUR-WORKER.workers.dev";
+const AI_API_URL = window.AI_API_URL || "https://sofreyeman.mhmmdkarimnejad.workers.dev";
 
 async function callAI(payload) {
   if (!AI_API_URL || AI_API_URL.includes("YOUR-WORKER")) {
@@ -1253,6 +1253,89 @@ function ChatAssistantTab({ targets, entries }) {
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="مثلاً: برای ۱۸۰۰ کالری چه بخورم؟" className="flex-1 bg-transparent px-2 text-[13px] text-[var(--ink)] outline-none" />
         <button onClick={send} disabled={!input.trim() || loading} className="bg-[#8FA05E] text-[#1C1610] rounded-xl px-4 py-2 text-[13px] font-medium disabled:opacity-40">ارسال</button>
       </div>
+    </div>
+  );
+}
+
+function TodayList({ entries, onRemove }) {
+  const grouped = MEALS.map((meal) => ({
+    ...meal,
+    items: entries.filter((entry) => entry.meal === meal.id),
+  })).filter((meal) => meal.items.length > 0);
+
+  if (entries.length === 0) {
+    return (
+      <div className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-6 text-center">
+        <div className="text-[15px] text-[var(--ink)] font-medium mb-1">
+          هنوز غذایی ثبت نشده
+        </div>
+        <div className="text-[12px] text-[var(--ink-2)]">
+          از بخش «افزودن» اولین غذای امروزت را ثبت کن.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {grouped.map((meal) => {
+        const MealIcon = meal.Icon;
+        const mealKcal = meal.items.reduce(
+          (sum, item) => sum + (item.kcal || 0),
+          0
+        );
+
+        return (
+          <div
+            key={meal.id}
+            className="bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] rounded-2xl p-4"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-[#E8A93A]/20 flex items-center justify-center">
+                  <MealIcon size={15} className="text-[#B9791F]" />
+                </div>
+
+                <span className="text-[14px] font-medium text-[var(--ink)]">
+                  {meal.label}
+                </span>
+              </div>
+
+              <span className="text-[12px] font-mono text-[var(--ink-2)]">
+                {toFa(Math.round(mealKcal))} کالری
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {meal.items.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between gap-3 py-2 border-t border-[var(--card-border)]"
+                >
+                  <div className="min-w-0">
+                    <div className="text-[14px] text-[var(--ink)] truncate">
+                      {entry.name}
+                    </div>
+
+                    <div className="text-[11px] text-[var(--ink-2)] font-mono mt-0.5">
+                      {entry.grams ? `${toFa(entry.grams)} گرم · ` : ""}
+                      {toFa(Math.round(entry.kcal || 0))} kcal
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => onRemove(entry)}
+                    className="shrink-0 w-8 h-8 rounded-full bg-[var(--input-bg-strong)] flex items-center justify-center text-[var(--ink-2)]"
+                    title="حذف"
+                  >
+                    <ITrash size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
