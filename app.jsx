@@ -741,7 +741,12 @@ function Collapse({ open, children }) {
   );
 }
 const round = (n) => Math.round(n * 10) / 10;
-const dateKey = (d) => {\n  const y = d.getFullYear();\n  const m = String(d.getMonth() + 1).padStart(2, "0");\n  const day = String(d.getDate()).padStart(2, "0");\n  return `${y}-${m}-${day}`;\n};
+const dateKey = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 const faDate = (d) => new Intl.DateTimeFormat("fa-IR", { weekday: "long", day: "numeric", month: "long" }).format(d);
 const faDateShort = (d) => new Intl.DateTimeFormat("fa-IR", { weekday: "short" }).format(d);
 const isToday = (d) => dateKey(d) === dateKey(new Date());
